@@ -7,59 +7,126 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.TreeMap;
 
 
 public class HuffmanEncoder {
 	
+	private HuffmanTree<Character, Integer> huffmanTree;
+	
+	private Map<Character, String> replacements;
+	
+	private Map<Character, Integer> frequencyMap;
+	
 	public static void main(String...args) {
 		String testString = "sadfjaklfjafaksjflasjdflkasjfasljfasdlkfjhasdkfhsadfjhadslfkhadsjkfhashlfdajkfhfsahdjkfhsafkahfhjdsfhsajdfhals";
 		HuffmanEncoder encoder = new HuffmanEncoder();
-		System.out.println(encoder.sortedFrequencyMap(testString));
-		PriorityQueue<MyEntry<Character, Integer>> q = encoder.sortedFrequency(testString);
+		Map<Character, Integer> frequencyMap = encoder.sortedFrequencyMap(testString);
+		encoder.setFrequencyMap(frequencyMap);
+		System.out.println(frequencyMap);
+		PriorityQueue<HuffmanTree<Character, Integer>> q = encoder.sortedFrequency(testString);
+		HuffmanTree<Character, Integer> resultTree = encoder.buildHuffmanTree(q);
+		encoder.setHuffmanTree(resultTree);
+		System.out.println(resultTree.treeString());
+		Map<Character, String> replacementMap = encoder.generateReplacementMap();
+		encoder.setReplacements(replacementMap);
+		System.out.println(replacementMap);
+		String encoded = encoder.encode(testString);
+		System.out.println(encoded);
+		String decoded = encoder.decode(encoded);
+		System.out.println(decoded);
+		System.out.println(testString.equals(decoded));
 	}
 	
 	
-	public void combineAndSortLowest(PriorityQueue<MyEntry<Character, Integer>> q) {
-		if (q.size() >= 2) {
+	public String encode(String raw) {
+		String resultString = "";
+		for(char c : raw.toCharArray()) {
+			if (replacements.get(c) == null) {
+				System.out.println(c + " is null?");
+			}
+			resultString += replacements.get(c);
+		}
+		return resultString;
+	}
+	
+	public String decode(String encoded) {
+		String resultString = "";
+		HuffmanTree<Character, Integer> iterator = huffmanTree;
+		for(char c : encoded.toCharArray()) {
+			if (c == '0') {
+				iterator = iterator.getLeftChild();
+			} else {
+				iterator = iterator.getRightChild();
+			}
+			if (iterator.isLeaf()) {
+				resultString += iterator.getKey();
+				iterator = huffmanTree;
+			}
+		}
+		return resultString;
+	}
+	
+	public Map<Character, String> generateReplacementMap() {
+		Map<Character, String> replacements = new HashMap<Character, String>();
+		Set<Character> keyset = frequencyMap.keySet();
+		Character[] keys = keyset.toArray(new Character[keyset.size()]);
+		for(Character c : keys) {
+			replacements.put(c, buildString(c));
+		}
+		return replacements;
+	}
+	
+	
+	public String buildString(Character c) {
+		return huffmanTree.pathString(c, "");
+	}
+
+
+	public HuffmanTree<Character, Integer> buildHuffmanTree(PriorityQueue<HuffmanTree<Character, Integer>> q) {
+		while (q.size() >= 2) {
 			combineAndSort(q);
 		}
+		return q.peek();
 	}
 	
-	public void combineAndSort(PriorityQueue<MyEntry<Character, Integer>> q) {
-		MyEntry<Character, Integer> e1 = q.remove();
-		MyEntry<Character, Integer> e2 = q.remove();
-		MyEntry<Character, Integer> combined = combine(e1, e2);
+	public void combineAndSort(PriorityQueue<HuffmanTree<Character, Integer>> q) {
+		HuffmanTree<Character, Integer> e1 = q.remove();
+		HuffmanTree<Character, Integer> e2 = q.remove();
+		HuffmanTree<Character, Integer> combined = combine(e1, e2);
 		q.add(combined);
 	}
 	
-	private MyEntry<Character, Integer> combine(MyEntry<Character, Integer> e1,
-			MyEntry<Character, Integer> e2) {
-		return new MyEntry(null, e1.getValue() + e2.getValue());
+	private HuffmanTree<Character, Integer> combine(HuffmanTree<Character, Integer> e1,
+			HuffmanTree<Character, Integer> e2) {
+		HuffmanTree<Character, Integer> combined = new HuffmanTree(null, e1.getValue() + e2.getValue());
+		combined.setLeftChild(e1);
+		combined.setRightChild(e2);
+		return combined;
 	}
 
 
-	public PriorityQueue<MyEntry<Character, Integer>> sortedFrequency(String raw) {
+	public PriorityQueue<HuffmanTree<Character, Integer>> sortedFrequency(String raw) {
 		Map<Character, Integer> sortedMap = sortedFrequencyMap(raw);
-		List<MyEntry<Character, Integer>> entryList = convertEntrySet(sortedMap);
-		PriorityQueue<MyEntry<Character, Integer>> entryQ = new PriorityQueue<MyEntry<Character, Integer>>(new EntryComparator());
-		for(MyEntry<Character, Integer> entry : entryList) {
+		List<HuffmanTree<Character, Integer>> entryList = convertEntrySet(sortedMap);
+		PriorityQueue<HuffmanTree<Character, Integer>> entryQ = new PriorityQueue<HuffmanTree<Character, Integer>>(new EntryComparator());
+		for(HuffmanTree<Character, Integer> entry : entryList) {
 			entryQ.add(entry);
 		}
 		return entryQ;
 	}
 	
-	private List<MyEntry<Character, Integer>> convertEntrySet(Map<Character, Integer> map) {
-		ArrayList<MyEntry<Character, Integer>> result = new ArrayList<MyEntry<Character, Integer>>();
+	private List<HuffmanTree<Character, Integer>> convertEntrySet(Map<Character, Integer> map) {
+		ArrayList<HuffmanTree<Character, Integer>> result = new ArrayList<HuffmanTree<Character, Integer>>();
 		for(Entry<Character, Integer> entry : map.entrySet()) {
-			result.add(new MyEntry<Character, Integer>(entry.getKey(), entry.getValue()));
+			result.add(new HuffmanTree<Character, Integer>(entry.getKey(), entry.getValue()));
 		}
 		return result;
 	}
 	
 	public Map<Character, Integer> sortedFrequencyMap(String raw) {
 		Map<Character, Integer> frequencyMap = new HashMap<Character, Integer>();
-
 		for(char curchar : raw.toCharArray()) {
 			if (frequencyMap.containsKey(curchar)) {
 				frequencyMap.put(curchar, frequencyMap.get(curchar) + 1);
@@ -70,55 +137,48 @@ public class HuffmanEncoder {
 		ValueComparator comp = new ValueComparator(frequencyMap);
 		Map<Character, Integer> treeMap = new TreeMap<Character, Integer>(comp);
 		treeMap.putAll(frequencyMap);
+		System.out.println(treeMap);
 		return treeMap;
 		
 	}
 	
-	final class MyEntry<K, V> implements Map.Entry<K, V> {
-	    private final K key;
-	    private V value;
-
-	    public MyEntry(K key, V value) {
-	        this.key = key;
-	        this.value = value;
-	    }
-
-	    @Override
-	    public K getKey() {
-	        return key;
-	    }
-	    
-	    @Override
-	    public boolean equals(Object o) {
-	    	return o != null && o instanceof MyEntry && ((MyEntry) o).getKey().equals(this.getKey());
-	    }
-	    
-	    @Override
-	    public String toString() {
-	    	return key + "=" + value;
-	    }
-
-	    @Override
-	    public V getValue() {
-	        return value;
-	    }
-
-	    @Override
-	    public V setValue(V value) {
-	        V old = this.value;
-	        this.value = value;
-	        return old;
-	    }
+	public HuffmanTree<Character, Integer> getHuffmanTree() {
+		return huffmanTree;
 	}
-	
 
 
-	
-	class EntryComparator implements Comparator<MyEntry<Character, Integer>> {
+	public void setHuffmanTree(HuffmanTree<Character, Integer> huffmanTree) {
+		this.huffmanTree = huffmanTree;
+	}
+
+	public Map<Character, Integer> getFrequencyMap() {
+		return frequencyMap;
+	}
+
+
+	public void setFrequencyMap(Map<Character, Integer> frequencyMap) {
+		this.frequencyMap = frequencyMap;
+	}
+
+	public Map<Character, String> getReplacements() {
+		return replacements;
+	}
+
+
+	public void setReplacements(Map<Character, String> replacements) {
+		this.replacements = replacements;
+	}
+
+	class EntryComparator implements Comparator<HuffmanTree<Character, Integer>> {
 
 		@Override
-		public int compare(MyEntry<Character, Integer> o1, MyEntry<Character, Integer> o2) {
-			return ((Integer) o1.getValue()) - ((Integer) o2.getValue());
+		public int compare(HuffmanTree<Character, Integer> o1, HuffmanTree<Character, Integer> o2) {
+			int value = ((Integer) o1.getValue()) - ((Integer) o2.getValue()) ;
+			if (value == 0) {
+				return o1.getKey().compareTo(o2.getKey());
+			} else {
+				return value;
+			}
 		}
 		
 	}
