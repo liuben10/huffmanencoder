@@ -1,4 +1,4 @@
-package base;
+package org.streams;
 
 import java.io.*;
 

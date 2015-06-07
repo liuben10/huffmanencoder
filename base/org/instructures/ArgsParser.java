@@ -8,6 +8,9 @@ import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 // A general command-line argument parser following the Unix
 // single-character option conventions (similar to getopt,
 // http://en.wikipedia.org/wiki/Getopt) and also the GNU long-form
@@ -17,6 +20,8 @@ import java.util.Map.Entry;
 // http://www.martinfowler.com/bliki/FluentInterface.html.
 public class ArgsParser
 {
+	
+ private Logger logger = LoggerFactory.getLogger(ArgsParser.class);
 	
  private HashMap<Option, String> optionalOpts = new HashMap<Option, String>();
  private HashMap<Option, String> mandatoryOpts = new HashMap<Option, String>();
@@ -136,8 +141,8 @@ public class ArgsParser
   // both are specified, then both will be printed before exit.
   public ArgsParser.Bindings parse(String[] args) {
     Bindings bindings = new Bindings();
-    System.out.println(optionalOpts);
-    System.out.println(mandatoryOpts);
+    logger.info("optional options: " + optionalOpts.toString());
+    logger.info("mandatory options: " + mandatoryOpts.toString());
     boolean helpFlag = false;
     boolean versionFlag = false;
     int i = 0;
@@ -169,7 +174,7 @@ public class ArgsParser
 
     	} else {
     		Operand boundOperand = getOperand();
-    		System.out.println("operand to bind: " + boundOperand);
+    		logger.info("operand to bind: " + boundOperand);
     		if (boundOperand != null) {
     			switch(operands.get(boundOperand)) {
     			case REQUIRED:
@@ -206,17 +211,17 @@ public class ArgsParser
     	i += offset;
     }
     if (helpFlag) {
-    	System.out.println(helpOption.getSummary());
+    	logger.info(helpOption.getSummary());
     	for (Entry<Option, String> option : optionalOpts.entrySet()) {
-    		System.out.println(option.getKey().toString() + " - " + option.getKey().getSummary());
+    		logger.info(option.getKey().toString() + " - " + option.getKey().getSummary());
     	}
     	for (Entry<Option, String> option : mandatoryOpts.entrySet()) {
-    		System.out.println(option.getKey().toString() + " - " + option.getKey().getSummary());
+    		logger.info(option.getKey().toString() + " - " + option.getKey().getSummary());
     	}
     	return bindings;
     }
     if (versionFlag) {
-    	System.out.println(this.versionString +" " +  this.versionOption.getSummary());
+    	logger.info(this.versionString +" " +  this.versionOption.getSummary());
     	return bindings;
     }
     for(Entry<Option, String> optionEntry : mandatoryOpts.entrySet()) {
