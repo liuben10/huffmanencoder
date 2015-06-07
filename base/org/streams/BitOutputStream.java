@@ -11,7 +11,10 @@ public class BitOutputStream implements AutoCloseable
   private int index;
 
   public static void main(String[] args) {
-    ArgsParser parser = ArgsParser.create("java BitOutputStream");
+    ArgsParser parser = ArgsParser.create("java BitOutputStream")
+    	      .summary("Bit output stream")
+    	      .versionNameAndFlags("v1.0", "-v,--version")
+    	      .helpFlags("-h,--help");
     Operand<File> OUT = Operand.create(File.class, "OUT");
     parser.requiredOperand(OUT);
     ArgsParser.Bindings settings = parser.parse(args);

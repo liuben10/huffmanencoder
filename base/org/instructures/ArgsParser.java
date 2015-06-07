@@ -8,8 +8,6 @@ import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 // A general command-line argument parser following the Unix
 // single-character option conventions (similar to getopt,
@@ -21,7 +19,6 @@ import org.slf4j.LoggerFactory;
 public class ArgsParser
 {
 	
- private Logger logger = LoggerFactory.getLogger(ArgsParser.class);
 	
  private HashMap<Option, String> optionalOpts = new HashMap<Option, String>();
  private HashMap<Option, String> mandatoryOpts = new HashMap<Option, String>();
@@ -141,11 +138,10 @@ public class ArgsParser
   // both are specified, then both will be printed before exit.
   public ArgsParser.Bindings parse(String[] args) {
     Bindings bindings = new Bindings();
-    logger.info("optional options: " + optionalOpts.toString());
-    logger.info("mandatory options: " + mandatoryOpts.toString());
     boolean helpFlag = false;
     boolean versionFlag = false;
     int i = 0;
+    Operand boundOperand = getOperand();
     while(i < args.length) {
     	String arg = args[i];
 		int offset = 0;
@@ -173,8 +169,7 @@ public class ArgsParser
     		}
 
     	} else {
-    		Operand boundOperand = getOperand();
-    		logger.info("operand to bind: " + boundOperand);
+    		System.out.println("operand to bind: " + boundOperand);
     		if (boundOperand != null) {
     			switch(operands.get(boundOperand)) {
     			case REQUIRED:
@@ -211,17 +206,14 @@ public class ArgsParser
     	i += offset;
     }
     if (helpFlag) {
-    	logger.info(helpOption.getSummary());
-    	for (Entry<Option, String> option : optionalOpts.entrySet()) {
-    		logger.info(option.getKey().toString() + " - " + option.getKey().getSummary());
-    	}
-    	for (Entry<Option, String> option : mandatoryOpts.entrySet()) {
-    		logger.info(option.getKey().toString() + " - " + option.getKey().getSummary());
-    	}
+    	System.out.println(summaryString);
+ //   	printForOptions();
+    	System.exit(OPTIONAL);
     	return bindings;
     }
     if (versionFlag) {
-    	logger.info(this.versionString +" " +  this.versionOption.getSummary());
+    	System.out.println(this.versionString +" " +  this.versionOption.getSummary());
+    	System.exit(OPTIONAL);
     	return bindings;
     }
     for(Entry<Option, String> optionEntry : mandatoryOpts.entrySet()) {
@@ -229,8 +221,41 @@ public class ArgsParser
     		throw new IllegalArgumentException(optionEntry.getValue() + " is missing");
     	}
     }
+    checkMandatoryOperandsAreBound(boundOperand, bindings);
     return bindings;
   }
+  
+  private void checkMandatoryOperandsAreBound(Operand boundOperand, Bindings bindings) {
+	  switch(operands.get(boundOperand)) {
+	  case REQUIRED:
+		  if (bindings.getOperand(boundOperand) == null) {
+			  throw new IllegalArgumentException ("Operand " + boundOperand + " is not bound");
+		  }
+		  break;
+	  case AT_LEAST_ONE:
+		  if (bindings.getOperands(boundOperand).isEmpty()) {
+			  throw new IllegalArgumentException ("Operand " + boundOperand + " is not bound");
+		  }
+		  break;
+	  }
+	  	
+	
+  }
+
+private void printForOptions() {
+  	for (Entry<Option, String> entry : optionalOpts.entrySet()) {
+		System.out.println(entry.getKey() + " \t\t" + entry.getKey().getSummary());
+	}
+	for (Entry<Option, String> entry : mandatoryOpts.entrySet()) {
+		System.out.println(entry.getKey() + " \t\t" + entry.getKey().getSummary());
+	}
+  }
+  
+//  private Collection<String> getFlags(Option opt) {
+//	  Collection<String> collection = new ArrayList<String>();
+//	  Collection<String> longFlagsOut 
+//	  opt.getFlags(longFlagsOut, shortFlagsOut);
+//  }
   
 	public boolean hasSpecifiedOption(Bindings bindings, Option specifiedOption) {
 		if  (bindings.hasOption(specifiedOption)) {
