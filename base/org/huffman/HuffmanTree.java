@@ -57,6 +57,7 @@ final class HuffmanTree<K, V> implements Map.Entry<K, V> {
     	}
     	return padding;
     }
+    
 
     @Override
     public K getKey() {
@@ -83,6 +84,18 @@ final class HuffmanTree<K, V> implements Map.Entry<K, V> {
         V old = this.value;
         this.value = value;
         return old;
+    }
+    
+    private String keyToBinaryString() {
+    	return Integer.toBinaryString((int)((Character) this.key).charValue());
+    }
+    
+    public String encode(int bits) {
+    	if (this.isLeaf()) {
+    		return "1" + String.format("%8s", keyToBinaryString()).replace(' ', '0');
+    	} else {
+    		return "0" + getLeftChild().encode(bits) + getRightChild().encode(bits);
+    	}
     }
 
 	public HuffmanTree<K, V> getLeftChild() {

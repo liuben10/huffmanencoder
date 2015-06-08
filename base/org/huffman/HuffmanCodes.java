@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.Stack;
 import java.util.TreeMap;
 
 import org.instructures.ArgsParser;
@@ -36,9 +37,15 @@ public class HuffmanCodes {
 	
 	private static ArgsParser parser;
 	
+	private static final String BEGINNING_STRING = "00001000";
+	
 	public File inputFile;
 	
 	public File outputFile;
+	
+	private int startIndex;
+	
+
 	
 	  static {
 		 String helpMsg = "Usage: java HuffmanCodes OPTIONS IN OUT\r\n" + 
@@ -52,12 +59,6 @@ public class HuffmanCodes {
 					"  -h, --help                 display this help and exit";
 		    parser = ArgsParser.create("java WordFrequency")
 		      .summary(helpMsg)
-
-
-
-
-  
-  
 		      .helpFlags("-h,--help");
 		    
 		    ENCODE = Option.create("-e,--encode")
@@ -81,7 +82,6 @@ public class HuffmanCodes {
 	  
 	  }
 	  
-	
 	  public HuffmanCodes(String raw) {
 		  init(raw);
 	  }
@@ -103,11 +103,12 @@ public class HuffmanCodes {
 	}
 	
 	public static void main(String...args) {
-		ArgsParser.Bindings bindings = parser.parse(args);
+		//ArgsParser.Bindings bindings = parser.parse(args);
 		String testString = "sadfjaklfjafaksjflasjdflkasjfasljfasdlkfjhasdkfhsadfjhadslfkhadsjkfhashlfdajkfhfsahdjkfhsafkahfhjdsfhsajdfhals";
 		HuffmanCodes encoder = new HuffmanCodes(testString);
 		String encoded = encoder.encode(testString);
 		System.out.println(encoded);
+		System.out.println(encoder.buildTree(encoded).treeString());
 		String decoded = encoder.decode(encoded);
 		System.out.println(decoded);
 		System.out.println(testString.equals(decoded));
@@ -128,19 +129,28 @@ public class HuffmanCodes {
 	
 	public String encode(String raw) {
 		String resultStream = "";
+		String header = encodeTree();
+		System.out.println("Header length: " + header.length());
 		for(char c : raw.toCharArray()) {
 			if (replacements.get(c) == null) {
 				System.out.println(c + " is null?");
 			}
 			resultStream += replacements.get(c);
 		}
-		return resultStream;
+		return header + resultStream;
+	}
+	
+	public String encodeTree() {
+		String encodedTree = huffmanTree.encode(8);
+		return BEGINNING_STRING + encodedTree;
 	}
 	
 	public String decode(String encoded) {
 		String resultString = "";
+		HuffmanTree<Character, Integer> huffmanTree = buildTree(encoded);
 		HuffmanTree<Character, Integer> iterator = huffmanTree;
-		for(char c : encoded.toCharArray()) {
+		char[] encodedBinary = subArray(encoded.toCharArray(), startIndex, encoded.length() - startIndex);
+		for(char c : encodedBinary) {
 			if (c == '0') {
 				iterator = iterator.getLeftChild();
 			} else {
@@ -154,6 +164,39 @@ public class HuffmanCodes {
 		return resultString;
 	}
 	
+	public HuffmanTree<Character, Integer> buildTree(String encoded) {
+		char[] chars = encoded.toCharArray();
+		startIndex = 8;
+		return readTree(chars);
+	}
+	
+	private HuffmanTree<Character, Integer> readTree(char[] chars) {
+		if (chars[startIndex] == '1') {
+			char[] asciiArray = subArray(chars, startIndex+1, 8);
+			String binaryString = new String(asciiArray);
+			char asciiChar = (char) fromBinaryString(binaryString);
+
+			startIndex += 9;
+			return new HuffmanTree<Character, Integer>(asciiChar, 0);
+		} else {
+			startIndex += 1;
+			HuffmanTree<Character, Integer> treeToBuild = new HuffmanTree<Character, Integer>(null, 0);
+			treeToBuild.setLeftChild(readTree(chars));
+			treeToBuild.setRightChild(readTree(chars));
+			return treeToBuild;
+		}
+	}
+	
+	private char[] subArray(char[] chars, int startIndex, int length) {
+		char[] subArray = new char[length];
+		System.arraycopy(chars, startIndex, subArray, 0, length);
+		return subArray;
+	}
+	
+	private int fromBinaryString(String binaryString) {
+		return Integer.parseInt(binaryString, 2);
+	}
+
 	public Map<Character, String> generateReplacementMap() {
 		Map<Character, String> replacements = new HashMap<Character, String>();
 		Set<Character> keyset = frequencyMap.keySet();
