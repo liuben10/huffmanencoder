@@ -142,30 +142,49 @@ public class ArgsParser
     boolean versionFlag = false;
     int i = 0;
     Operand boundOperand = getOperand();
+    Option optToBind = null;
     while(i < args.length) {
     	String arg = args[i];
 		int offset = 0;
+		if (optToBind != null) {
+			if (arg.contains(",")) {
+				String[] operands = arg.split(",");
+				for(String operand : operands) {
+					bindings.bindOperand(optToBind.getOperand(), operand);
+				}
+			} else {
+				bindings.bindOperand(optToBind.getOperand(), arg);
+			}
+			optToBind = null;
+		}
     	if (isOption(arg)) {
     		offset = 1;
-    		arg = removeDashes(arg);
-    		Option specifiedOption = findOptionAmongOptions(arg);
-    		if (specifiedOption == null) {
-    			throw new IllegalArgumentException("Option not found!");
-    		}
-    		if (specifiedOption.equals(helpOption)) {
-    			helpFlag = true;
-    			break;
-    		} else if (specifiedOption.equals(versionOption)) {
-    			versionFlag = true;
-    			break;
-    		}
-    		if (hasSpecifiedOption(bindings, specifiedOption)) {
-    			throw new IllegalArgumentException("Option duplicated or an associated option is already bound");
-    		}
-    		bindings.addOption(specifiedOption);
-    		while(i + offset < args.length && !isOption(args[i + offset]) && isBindable(specifiedOption, args[i + offset])) {
-    			bindings.bindOperand(specifiedOption.getOperand(), args[i + offset]);
-    			offset += 1;
+    		if (isShortOption(arg)) {
+    			String optionString = arg.substring(1, 2);
+    			Option opt = findOptionAmongOptions(optionString);
+    			bindings.addOption(opt);
+    			if (opt.hasOperand()) {
+    				if (arg.contains(",")) {
+    					String[] operands = arg.substring(optionString.length() + 1).split(",");
+    					for(String operand : operands) {
+    						bindings.bindOperand(opt.getOperand(), operand);
+    					}
+    				} else {
+    					optToBind = opt;
+    				}
+    			} else {
+    				if (arg.length() > 2) {
+    					for(int j = 2; j < arg.length(); j++) {
+    						Option nextoption = findOptionAmongOptions("" + arg.charAt(j) + "");
+    						if (nextoption == null || nextoption.hasOperand()) {
+    							System.err.println("Error: next option has to have no operands");
+    						} else {
+    							bindings.addOption(nextoption);
+    						}
+    					}
+    				}
+    			}
+    		} else {
     		}
 
     	} else {
@@ -280,8 +299,12 @@ private void printForOptions() {
 }
 
 private boolean isOption(String arg) {
-	  return arg.startsWith("-") || arg.startsWith("--");
+	  return arg.startsWith("-");
   }
+
+private boolean isShortOption(String arg) {
+	return arg.startsWith("-") && arg.charAt(1) != '-';
+}
   
   private Operand getOperand() {
 	  Operand[] operand = operands.keySet().toArray(new Operand[operands.entrySet().size()]);

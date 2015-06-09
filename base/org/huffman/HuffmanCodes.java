@@ -107,33 +107,33 @@ public class HuffmanCodes {
 		String testString = "sadfjaklfjafaksjflasjdflkasjfasljfasdlkfjhasdkfhsadfjhadslfkhadsjkfhashlfdajkfhfsahdjkfhsafkahfhjdsfhsajdfhals";
 		HuffmanCodes encoder = new HuffmanCodes(testString);
 		String encoded = encoder.encode(testString);
-		System.out.println(encoded);
-		System.out.println(encoder.buildTree(encoded).treeString());
+		
+		
 		String decoded = encoder.decode(encoded);
-		System.out.println(decoded);
-		System.out.println(testString.equals(decoded));
+		
+		
 	}
 	
 	public void init(String raw) {
 		Map<Character, Integer> frequencyMap = sortedFrequencyMap(raw);
 		setFrequencyMap(frequencyMap);
-		System.out.println(frequencyMap);
+		
 		PriorityQueue<HuffmanTree<Character, Integer>> q = sortedFrequency(raw);
 		HuffmanTree<Character, Integer> resultTree = buildHuffmanTree(q);
 		setHuffmanTree(resultTree);
-		System.out.println(resultTree.treeString());
+		
 		Map<Character, String> replacementMap = generateReplacementMap();
 		setReplacements(replacementMap);
-		System.out.println(replacementMap);
+		
 	}
 	
 	public String encode(String raw) {
 		String resultStream = "";
 		String header = encodeTree();
-		System.out.println("Header length: " + header.length());
+		
 		for(char c : raw.toCharArray()) {
 			if (replacements.get(c) == null) {
-				System.out.println(c + " is null?");
+				
 			}
 			resultStream += replacements.get(c);
 		}
@@ -266,7 +266,7 @@ public class HuffmanCodes {
 		ValueComparator comp = new ValueComparator(frequencyMap);
 		Map<Character, Integer> treeMap = new TreeMap<Character, Integer>(comp);
 		treeMap.putAll(frequencyMap);
-		System.out.println(treeMap);
+		
 		return treeMap;
 		
 	}
