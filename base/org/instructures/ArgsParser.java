@@ -19,10 +19,21 @@ import java.util.Map.Entry;
 public class ArgsParser
 {
 	
+	public static void main(String...args) {
+	    ArgsParser parser = ArgsParser.create("java ModusOperand")
+	    	      .summary("Utility to count the occurences of each word in a text file")
+	    	      .versionNameAndFlags("v1.0", "-v,--version")
+	    	      .helpFlags("-h,--help");
+		 Operand THRESHOLD = Operand.create(Integer.class, "Value");
+		 parser.requiredOperand(THRESHOLD);
+		 Bindings bindings = parser.parse(new String[]{"55"});
+		 System.out.println(bindings.getOperand(THRESHOLD));
+	}
+	
 	
  private HashMap<Option, String> optionalOpts = new HashMap<Option, String>();
  private HashMap<Option, String> mandatoryOpts = new HashMap<Option, String>();
- private HashMap<Operand, Integer> operands = new HashMap<Operand, Integer>();
+ private HashMap<Operand, Integer> program_operands = new HashMap<Operand, Integer>();
  private HashMap<String, Operand> docNameToOperand = new HashMap<String, Operand>();
 
 
@@ -40,7 +51,7 @@ public class ArgsParser
     HELP_MESSAGE = "display this help and exit",
     VERSION_MESSAGE = "output version information and exit",
     GENERIC_OPTIONS = "OPTIONS",
-    OPTION_SUMMARY_FMT = "%4s%s %-20s   %s%n";
+    OPTION_SUMMARY_FMT = "%4s%s%-20s    %s%n";
   
   // Factory to make a new ArgsParser instance, to generate help
   // messages and to process and validate the arguments for a command
@@ -143,10 +154,26 @@ public class ArgsParser
     int i = 0;
     Operand boundOperand = getOperand();
     Option optToBind = null;
+    if (args.length == 0) {
+    	System.out.println(this.summaryString);
+    }
+    System.out.println(Arrays.toString(args));
     while(i < args.length) {
+    	System.out.println(mandatoryOpts);
+    	System.out.println(optionalOpts);
+    	System.out.println(program_operands);
+    	System.out.println(boundOperand);
     	String arg = args[i];
+    	System.out.println(arg);
 		int offset = 0;
+	    System.out.println("Made it past version");
 		if (optToBind != null) {
+			System.out.println("optToBind?");
+			i += 1;
+			if (isOption(arg)) {
+				System.err.println("ERROR: option was not bound.");
+				break;
+			}
 			if (arg.contains(",")) {
 				String[] operands = arg.split(",");
 				for(String operand : operands) {
@@ -156,13 +183,26 @@ public class ArgsParser
 				bindings.bindOperand(optToBind.getOperand(), arg);
 			}
 			optToBind = null;
+			continue;
 		}
     	if (isOption(arg)) {
+    		if (isHelpFlag(arg)) {
+    			System.out.println("is help flag");
+    			printForOptions();
+    			break;
+    		}
+    		System.out.println("made it past help");
+    	    if (isVersionFlag(arg)) {
+    	    	System.out.println("is version flag");
+    	    	System.out.println(this.versionString +" " +  this.versionOption.getSummary());
+    	    	break;
+    	    }
+    		System.out.println("Thinks is option");
     		offset = 1;
     		if (isShortOption(arg)) {
     			String optionString = arg.substring(1, 2);
     			Option opt = findOptionAmongOptions(optionString);
-    			bindings.addOption(opt);
+    			bindAndCheck(bindings, opt);
     			if (opt.hasOperand()) {
     				if (arg.contains(",")) {
     					String[] operands = arg.substring(optionString.length() + 1).split(",");
@@ -178,22 +218,46 @@ public class ArgsParser
     						Option nextoption = findOptionAmongOptions("" + arg.charAt(j) + "");
     						if (nextoption == null || nextoption.hasOperand()) {
     							System.err.println("Error: next option has to have no operands");
+    							break;
     						} else {
-    							bindings.addOption(nextoption);
+    							bindAndCheck(bindings, nextoption);
     						}
     					}
     				}
     			}
     		} else {
+    			System.out.println("thinks is long option");
+    			if (arg.contains("=")) {
+    				String[] keywords = arg.split("=");
+    				String optionString = keywords[0].substring(2);
+    				Option opt = findOptionAmongOptions(optionString);
+    				bindAndCheck(bindings, opt);
+    				if (keywords[1].contains(",")) {
+    					String[] operands = keywords[1].split(",");
+    					for(String operand : operands) {
+    						bindings.bindOperand(opt.getOperand(), operand);
+    					}
+    				} else {
+    					bindings.bindOperand(opt.getOperand(), keywords[1]);
+    				}
+    			} else {
+    				String optionString = arg.substring(2);
+    				Option opt = findOptionAmongOptions(optionString);
+    				bindAndCheck(bindings, opt);
+    				if (opt.hasOperand()) {
+    					optToBind = opt;
+    				}
+    			}
     		}
 
     	} else {
-    		System.out.println("operand to bind: " + boundOperand);
+    		System.out.println("is an operand");
     		if (boundOperand != null) {
-    			switch(operands.get(boundOperand)) {
+    			switch(program_operands.get(boundOperand)) {
     			case REQUIRED:
     				if (isOption(arg)) {
-    					throw new IllegalArgumentException("Expected a mandatory operand");
+    					System.err.println("Expected a mandatory operand");
+    					System.exit(1);
     				}
     				bindings.bindOperand(boundOperand, arg);
     				offset += 1;
@@ -206,7 +270,8 @@ public class ArgsParser
     				break;
     			case AT_LEAST_ONE:
 					if (isOption(arg)) {
-						throw new IllegalArgumentException("Expected at least one operand");
+						System.err.println("Expected at least one operand");
+						System.exit(1);
 					}
     				while(i + offset < args.length && !isOption(args[i + offset])) {
     					bindings.bindOperand(boundOperand, args[i + offset]);	
@@ -222,38 +287,65 @@ public class ArgsParser
     			}
     		}
     	}
+    	System.out.println(i);
     	i += offset;
     }
-    if (helpFlag) {
-    	System.out.println(summaryString);
- //   	printForOptions();
-    	System.exit(OPTIONAL);
-    	return bindings;
-    }
-    if (versionFlag) {
-    	System.out.println(this.versionString +" " +  this.versionOption.getSummary());
-    	System.exit(OPTIONAL);
-    	return bindings;
-    }
+    System.out.println(bindings.operands);
     for(Entry<Option, String> optionEntry : mandatoryOpts.entrySet()) {
     	if (!hasSpecifiedOption(bindings, optionEntry.getKey())) {
-    		throw new IllegalArgumentException(optionEntry.getValue() + " is missing");
+    		System.err.println(optionEntry.getValue() + " is missing");
+    		break;
     	}
     }
     checkMandatoryOperandsAreBound(boundOperand, bindings);
     return bindings;
   }
   
+  private boolean isVersionFlag(String arg) {
+	return arg.equals(getShortFlag(versionOption)) 
+		|| arg.equals(getLongFlag(versionOption));
+}
+
+private boolean isHelpFlag(String arg) {
+	return arg.equals(getShortFlag(helpOption)) || arg.equals(getLongFlag(helpOption));
+  }
+
+private void bindAndCheck(Bindings bindings, Option opt) {
+	  if (!hasSpecifiedOption(bindings, opt)) {
+		  bindings.addOption(opt);
+	  } else {
+		  System.err.println("Error: dependency already exists");
+		  return;
+	  }
+  }
+  
+  public void generateHelpString() {
+	  printForOptions();
+  }
+  public List<String> getLongFlags(Map<Option, String> map) {
+	  Set<Option> keys = map.keySet();
+	  List<String> resultFlags = new ArrayList<String>();
+	  for(Option key : keys) {
+		  Collection<String> shortFlags = new ArrayList<String>();
+		  Collection<String> longFlags = new ArrayList<String>();
+		  key.getFlags(longFlags, shortFlags);
+		  resultFlags.add(((ArrayList<String>)longFlags).get(0));
+	  }
+	  return resultFlags;
+  }
+  
   private void checkMandatoryOperandsAreBound(Operand boundOperand, Bindings bindings) {
-	  switch(operands.get(boundOperand)) {
+	  switch(program_operands.get(boundOperand)) {
 	  case REQUIRED:
 		  if (bindings.getOperand(boundOperand) == null) {
-			  throw new IllegalArgumentException ("Operand " + boundOperand + " is not bound");
+			  System.err.println("Operand " + boundOperand + " is not bound");
+			  System.exit(1);
 		  }
 		  break;
 	  case AT_LEAST_ONE:
 		  if (bindings.getOperands(boundOperand).isEmpty()) {
-			  throw new IllegalArgumentException ("Operand " + boundOperand + " is not bound");
+			  System.err.println("Operand " + boundOperand + " is not bound");
+			  System.exit(1);
 		  }
 		  break;
 	  }
@@ -262,19 +354,36 @@ public class ArgsParser
   }
 
 private void printForOptions() {
-  	for (Entry<Option, String> entry : optionalOpts.entrySet()) {
-		System.out.println(entry.getKey() + " \t\t" + entry.getKey().getSummary());
-	}
-	for (Entry<Option, String> entry : mandatoryOpts.entrySet()) {
-		System.out.println(entry.getKey() + " \t\t" + entry.getKey().getSummary());
-	}
+  	printHelpForMap(optionalOpts);
+  	printHelpForMap(mandatoryOpts);
   }
+
+private void printHelpForMap(Map<Option, String> opts) {
+	for (Entry<Option, String> entry : opts.entrySet()) {
+  		Option opt = entry.getKey();
+  		String shortFlag = getShortFlag(opt);
+  		String longFlag = getLongFlag(opt);
+  		boolean useComma = shortFlag != null && longFlag != null;
+		System.out.printf(OPTION_SUMMARY_FMT, shortFlag == null ? "" : "-" + shortFlag + (useComma ? ", " : ""),
+											 "--" + longFlag,
+											 opt.hasOperand() ? "=" + opt.getOperand().getDocName() : "", opt.getSummary() );
+	}
+}
+
+private String getShortFlag(Option opt) {
+	ArrayList<String> shortFlag = new ArrayList<String>();
+	ArrayList<String> longFlag = new ArrayList<String>();
+	opt.getFlags(longFlag, shortFlag);
+	return shortFlag.size() > 0 ? shortFlag.get(0) : null;
+}
+
+private String getLongFlag(Option opt) {
+	ArrayList<String> shortFlag = new ArrayList<String>();
+	ArrayList<String> longFlag = new ArrayList<String>();
+	opt.getFlags(longFlag, shortFlag);
+	return longFlag.size() > 0 ? longFlag.get(0) : null;
+}
   
-//  private Collection<String> getFlags(Option opt) {
-//	  Collection<String> collection = new ArrayList<String>();
-//	  Collection<String> longFlagsOut 
-//	  opt.getFlags(longFlagsOut, shortFlagsOut);
-//  }
   
 	public boolean hasSpecifiedOption(Bindings bindings, Option specifiedOption) {
 		if  (bindings.hasOption(specifiedOption)) {
@@ -307,7 +416,7 @@ private boolean isShortOption(String arg) {
 }
   
   private Operand getOperand() {
-	  Operand[] operand = operands.keySet().toArray(new Operand[operands.entrySet().size()]);
+	  Operand[] operand = program_operands.keySet().toArray(new Operand[program_operands.entrySet().size()]);
 	  return operand.length > 0 ? operand[0] : null;
   }
 
@@ -441,7 +550,7 @@ private Option findMandatory(String toFind) {
   // same `requiredOperand` instance to the `getOperand` method.
   public ArgsParser requiredOperand(Operand requiredOperand) {
 	  this.docNameToOperand.put(requiredOperand.getDocName(), requiredOperand);
-	  this.operands.put(requiredOperand, REQUIRED);
+	  this.program_operands.put(requiredOperand, REQUIRED);
     return this;
   }
 
@@ -452,7 +561,7 @@ private Option findMandatory(String toFind) {
   // the empty list or a list with a single element.
   public ArgsParser optionalOperand(Operand optionalOperand) {
 	  this.docNameToOperand.put(optionalOperand.getDocName(), optionalOperand);
-	this.operands.put(optionalOperand, OPTIONAL);
+	this.program_operands.put(optionalOperand, OPTIONAL);
     return this;
   }
 
@@ -468,7 +577,7 @@ private Option findMandatory(String toFind) {
   // validation process).
   public ArgsParser oneOrMoreOperands(Operand operand) {
 	  this.docNameToOperand.put(operand.getDocName(), operand);
-    this.operands.put(operand, AT_LEAST_ONE);
+    this.program_operands.put(operand, AT_LEAST_ONE);
     return this;
   }
 
@@ -483,7 +592,7 @@ private Option findMandatory(String toFind) {
   // all matches, potentially the empty list.
   public ArgsParser zeroOrMoreOperands(Operand operand) {
 	  this.docNameToOperand.put(operand.getDocName(), operand);
-    this.operands.put(operand, AT_LEAST_ZERO);
+    this.program_operands.put(operand, AT_LEAST_ZERO);
     return this;
   }
 
