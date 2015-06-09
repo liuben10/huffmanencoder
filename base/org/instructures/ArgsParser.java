@@ -27,7 +27,7 @@ public class ArgsParser
 		 Operand THRESHOLD = Operand.create(Integer.class, "Value");
 		 parser.requiredOperand(THRESHOLD);
 		 Bindings bindings = parser.parse(new String[]{"55"});
-		 System.out.println(bindings.getOperand(THRESHOLD));
+		 
 	}
 	
 	
@@ -89,8 +89,11 @@ public class ArgsParser
       else if (operand.hasDefaultValue()) {
         return operand.getDefaultValue();
       }
-      throw new RuntimeException(
-        String.format("Expected one binding for operand %s", operand));
+      System.err.println("Error");
+      System.err.println("Usage");
+      return null;
+//      throw new RuntimeException(
+//        String.format("Expected one binding for operand %s", operand));
     }
     
     public <T> List<T> getOperands(Operand<T> operand) {
@@ -155,53 +158,38 @@ public class ArgsParser
     Operand boundOperand = getOperand();
     Option optToBind = null;
     if (args.length == 0) {
-    	System.out.println(this.summaryString);
+    	if (mandatoryOpts.size() != 0 || program_operands.size() != 0) {
+    		System.err.println("Error");
+    		System.err.println("Usage");
+    	}
+    	return bindings;
     }
-    System.out.println(Arrays.toString(args));
+    
     while(i < args.length) {
-    	System.out.println(mandatoryOpts);
-    	System.out.println(optionalOpts);
-    	System.out.println(program_operands);
-    	System.out.println(boundOperand);
     	String arg = args[i];
-    	System.out.println(arg);
+    	
 		int offset = 0;
-	    System.out.println("Made it past version");
+	    
 		if (optToBind != null) {
-			System.out.println("optToBind?");
 			i += 1;
 			if (isOption(arg)) {
+				System.err.println("Usage");
 				System.err.println("ERROR: option was not bound.");
 				break;
 			}
-			if (arg.contains(",")) {
-				String[] operands = arg.split(",");
-				for(String operand : operands) {
-					bindings.bindOperand(optToBind.getOperand(), operand);
-				}
-			} else {
-				bindings.bindOperand(optToBind.getOperand(), arg);
-			}
+			bindings.bindOperand(optToBind.getOperand(), arg);
 			optToBind = null;
 			continue;
 		}
     	if (isOption(arg)) {
-    		if (isHelpFlag(arg)) {
-    			System.out.println("is help flag");
-    			printForOptions();
-    			break;
-    		}
-    		System.out.println("made it past help");
-    	    if (isVersionFlag(arg)) {
-    	    	System.out.println("is version flag");
-    	    	System.out.println(this.versionString +" " +  this.versionOption.getSummary());
-    	    	break;
-    	    }
-    		System.out.println("Thinks is option");
     		offset = 1;
     		if (isShortOption(arg)) {
     			String optionString = arg.substring(1, 2);
     			Option opt = findOptionAmongOptions(optionString);
+    			if (opt == null) {
+    				System.err.println("Error");
+    				System.err.println("Usage");
+    			}
     			bindAndCheck(bindings, opt);
     			if (opt.hasOperand()) {
     				if (arg.contains(",")) {
@@ -210,7 +198,11 @@ public class ArgsParser
     						bindings.bindOperand(opt.getOperand(), operand);
     					}
     				} else {
-    					optToBind = opt;
+    					if (arg.length() > 2) {
+    						bindings.bindOperand(opt.getOperand(), arg.substring(2));
+    					} else {
+    						optToBind = opt;
+    					}
     				}
     			} else {
     				if (arg.length() > 2) {
@@ -218,6 +210,7 @@ public class ArgsParser
     						Option nextoption = findOptionAmongOptions("" + arg.charAt(j) + "");
     						if (nextoption == null || nextoption.hasOperand()) {
     							System.err.println("Error: next option has to have no operands");
+    							System.err.println("Usage");
     							break;
     						} else {
     							bindAndCheck(bindings, nextoption);
@@ -226,7 +219,6 @@ public class ArgsParser
     				}
     			}
     		} else {
-    			System.out.println("thinks is long option");
     			if (arg.contains("=")) {
     				String[] keywords = arg.split("=");
     				String optionString = keywords[0].substring(2);
@@ -251,7 +243,7 @@ public class ArgsParser
     		}
 
     	} else {
-    		System.out.println("is an operand");
+    		
     		if (boundOperand != null) {
     			switch(program_operands.get(boundOperand)) {
     			case REQUIRED:
@@ -287,10 +279,10 @@ public class ArgsParser
     			}
     		}
     	}
-    	System.out.println(i);
+    	
     	i += offset;
     }
-    System.out.println(bindings.operands);
+    
     for(Entry<Option, String> optionEntry : mandatoryOpts.entrySet()) {
     	if (!hasSpecifiedOption(bindings, optionEntry.getKey())) {
     		System.err.println(optionEntry.getValue() + " is missing");
@@ -335,6 +327,9 @@ private void bindAndCheck(Bindings bindings, Option opt) {
   }
   
   private void checkMandatoryOperandsAreBound(Operand boundOperand, Bindings bindings) {
+	  if (boundOperand == null) {
+		  return;
+	  }
 	  switch(program_operands.get(boundOperand)) {
 	  case REQUIRED:
 		  if (bindings.getOperand(boundOperand) == null) {
@@ -389,9 +384,11 @@ private String getLongFlag(Option opt) {
 		if  (bindings.hasOption(specifiedOption)) {
 			return true;
 		}
-		for(Option option : specifiedOption.getDependencies()) {
-			if (bindings.hasOption(option)) {
-				return true;
+		if (specifiedOption.getDependencies() != null) {
+			for(Option option : specifiedOption.getDependencies()) {
+				if (bindings.hasOption(option)) {
+					return true;
+				}
 			}
 		}
 		return false;
