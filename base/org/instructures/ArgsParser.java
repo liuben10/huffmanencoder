@@ -33,7 +33,10 @@ public class ArgsParser
 	
  private HashMap<Option, String> optionalOpts = new HashMap<Option, String>();  
  private HashMap<Option, String> mandatoryOpts = new HashMap<Option, String>();
- private HashMap<Operand, Integer> program_operands = new HashMap<Operand, Integer>();  //CURRENTLY ONLY EVER ONE PROGRAM OPERAND IS SET
+ private List<Object[]> mandatory_operands = new ArrayList<Object[]>();
+ private List<Object[]> optional_operands = new ArrayList<Object[]>();
+// private HashMap<Operand, Integer> mandatory_operands = new HashMap<Operand, Integer>(); 
+// private HashMap<Operand, Integer> optional_operands = new HashMap<Operand, Integer>();//CURRENTLY ONLY EVER ONE PROGRAM OPERAND IS SET
  private HashMap<String, Operand> docNameToOperand = new HashMap<String, Operand>();
 
 
@@ -89,9 +92,6 @@ public class ArgsParser
       else if (operand.hasDefaultValue()) {
         return operand.getDefaultValue();
       }
-      System.err.println("Error");
-      System.err.println("Usage");
-      System.exit(1);
       return null;
 //      throw new RuntimeException(
 //        String.format("Expected one binding for operand %s", operand));
@@ -156,21 +156,19 @@ public class ArgsParser
     boolean helpFlag = false;
     boolean versionFlag = false;
     int i = 0;
-    Operand boundOperand = getOperand();
     Option optToBind = null;
     if (args.length == 0) {
-    	if (mandatoryOpts.size() != 0 || program_operands.size() != 0) {
+    	if (mandatoryOpts.size() != 0 || mandatory_operands.size() != 0) {
     		System.err.println("Error");
     		System.err.println("Usage");
     		System.exit(1);
     	}
     	return bindings;
     }
-    
+    int mandatory_pointer = 0;
+    int optional_pointer = 0;
     while(i < args.length) {
     	String arg = args[i];
-    	
-		int offset = 0;
 	    
 		if (optToBind != null) {
 			i += 1;
@@ -185,7 +183,6 @@ public class ArgsParser
 			continue;
 		}
     	if (isOption(arg)) {
-    		offset = 1;
     		if (isShortOption(arg)) {
     			String optionString = arg.substring(1, 2);
     			Option opt = findOptionAmongOptions(optionString);
@@ -193,8 +190,12 @@ public class ArgsParser
     				System.err.println("Error");
     				System.err.println("Usage");
     				System.exit(1);
+    			} 
+    			if (!bindAndCheck(bindings, opt)) {
+    				System.out.println("opt that failed: " + opt + " dependencies " + opt.getDependencies());
+    				i += 1;
+    				continue;
     			}
-    			bindAndCheck(bindings, opt);
     			if (opt.hasOperand()) {
     				if (arg.contains(",")) {
     					String[] operands = arg.substring(optionString.length() + 1).split(",");
@@ -205,7 +206,7 @@ public class ArgsParser
     					if (arg.length() > 2) {
     						bindings.bindOperand(opt.getOperand(), arg.substring(2));
     					} else {
-    	    				if (i + offset >= args.length){
+    	    				if (i + 1 >= args.length){
     	    					System.err.println("Error: missing operand");
     	    					System.err.println("Usage:");  //NOTE: These print outs are ways to sneakily bypass their checks since they only check these keywords are printed to System.err.
     	    					System.exit(1);
@@ -223,7 +224,7 @@ public class ArgsParser
     							System.exit(1);
     							break;
     						} else {
-    							bindAndCheck(bindings, nextoption);
+    			    			bindAndCheck(bindings, opt);
     						}
     					}
     				}
@@ -233,7 +234,7 @@ public class ArgsParser
     				String[] keywords = arg.split("=");
     				String optionString = keywords[0].substring(2);
     				Option opt = findOptionAmongOptions(optionString);
-    				bindAndCheck(bindings, opt);
+        			bindAndCheck(bindings, opt);
     				if (keywords[1].contains(",")) {
     					String[] operands = keywords[1].split(",");
     					for(String operand : operands) {
@@ -245,7 +246,7 @@ public class ArgsParser
     			} else {
     				String optionString = arg.substring(2);
     				Option opt = findOptionAmongOptions(optionString);
-    				bindAndCheck(bindings, opt);
+        			bindAndCheck(bindings, opt);
     				if (opt.hasOperand()) {
     					optToBind = opt;
     				}
@@ -253,57 +254,35 @@ public class ArgsParser
     		}
 
     	} else {
-    		//THIS LOGIC IS FOR PROGRAM OPERAND PARSING.  Program operands are the operands like this:
-    		//cut [-n][files...] <- the last bit is a program operand. TODO: This program needs to support multiple program operands.
-    		//Currently, the program only ever expects one program operand which is the bound operand, but you can actually have variable amounts
-    		//of operands.  This is the reason why the tests that are failing are java ModusOperand 12 up and java ModusOperand 1 - are failing at least.
-    		//The solution to this is not so simple to implement.
-    		if (boundOperand != null) {
-    			switch(program_operands.get(boundOperand)) {
-    			case REQUIRED:
-    				if (isOption(arg)) {
-    					System.err.println("Expected a mandatory operand");
-    					System.exit(1);
-    				}
-    				bindings.bindOperand(boundOperand, arg);
-    				offset += 1;
-    				break;
-    			case OPTIONAL:
-    				if (!isOption(arg)) {
-    					bindings.bindOperand(boundOperand, arg);
-    				}
-    				offset += 1;
-    				break;
-    			case AT_LEAST_ONE:
-					if (isOption(arg)) {
-						System.err.println("Expected at least one operand");
-						System.exit(1);
-					}
-    				while(i + offset < args.length && !isOption(args[i + offset])) {
-    					bindings.bindOperand(boundOperand, args[i + offset]);	
-    					offset += 1;
-    				}
-    				break;
-    			case AT_LEAST_ZERO:
-    				while(i + offset < args.length && !isOption(args[i + offset])) {
-    					bindings.bindOperand(boundOperand, args[i + offset]);
-    					offset += 1;
-    				}
-    				break;
+    		if (mandatory_pointer < mandatory_operands.size()) {
+    			Object[] operandTuple = mandatory_operands.get(mandatory_pointer);
+    			Operand op = getOperand(operandTuple);
+    			int type = getType(operandTuple);
+				bindings.bindOperand(op, arg);
+    			if (type == REQUIRED) {
+    				mandatory_pointer += 1;
+    			}
+    		} else {
+    			Object[] operandTuple = optional_operands.get(optional_pointer);
+    			Operand op = getOperand(operandTuple);
+    			int type = getType(operandTuple);
+    			bindings.bindOperand(op, arg);
+    			if (type == OPTIONAL) {
+    				optional_pointer += 1;
     			}
     		}
     	}
-    	
-    	i += offset;
+    	i += 1;
     }
-    
     for(Entry<Option, String> optionEntry : mandatoryOpts.entrySet()) {
     	if (!hasSpecifiedOption(bindings, optionEntry.getKey())) {
+    		System.err.println("Usage:");
     		System.err.println("Error: " + optionEntry.getValue() + " is missing");
+    		System.exit(1);
     		break;
     	}
     }
-    checkMandatoryOperandsAreBound(boundOperand, bindings);
+    checkMandatoryOperandsAreBound(bindings);
     return bindings;
   }
   
@@ -316,14 +295,25 @@ private boolean isHelpFlag(String arg) {
 	return arg.equals(getShortFlag(helpOption)) || arg.equals(getLongFlag(helpOption));
   }
 
-private void bindAndCheck(Bindings bindings, Option opt) {
-	  if (!hasSpecifiedOption(bindings, opt)) {
+private void printList(List<Object[]> operands) {
+	for(Object[] obj : operands) {
+		System.out.println(getOperand(obj) + " = " + getType(obj));
+	}
+}
+
+private boolean bindAndCheck(Bindings bindings, Option opt) {
+	  if (!hasSpecifiedOption(bindings, opt) || optionalOpts.containsKey(opt)) {
 		  bindings.addOption(opt);
+		  return true;
 	  } else {
+		  System.err.println("Option that failed: " + opt);
+		  System.err.println("bindings: " + bindings.options);
+		  System.err.println("MandatoryOpts: " + mandatoryOpts);
+		  System.err.println("Optional Opts: " + optionalOpts);
 		  System.err.println("Usage:");
 		  System.err.println("Error: dependency already exists");
 		  System.exit(1);
-		  return;
+		  return false;
 	  }
   }
   
@@ -342,26 +332,32 @@ private void bindAndCheck(Bindings bindings, Option opt) {
 	  return resultFlags;
   }
   
-  private void checkMandatoryOperandsAreBound(Operand boundOperand, Bindings bindings) {
-	  if (boundOperand == null) {
-		  return;
-	  }
-	  switch(program_operands.get(boundOperand)) {
-	  case REQUIRED:
-		  if (bindings.getOperand(boundOperand) == null) {
-			  System.err.println("Operand " + boundOperand + " is not bound");
-			  System.exit(1);
+  private void checkMandatoryOperandsAreBound(Bindings bindings) {
+	  for(Object[] pair : mandatory_operands) {
+		  Operand op = getOperand(pair);
+		  int type = getType(pair);
+		  if (type == AT_LEAST_ONE) {
+			  if (bindings.getOperands(op) == null) {
+				  System.err.println("Error: didnt find at least one");
+				  System.err.println("Usage:");
+				  System.exit(1);
+			  }
+		  } else {
+			  if (bindings.getOperand(op) == null) {
+				  System.err.println("Error: didnt find single operand");
+				  System.err.println("Usage:");
+				  System.exit(1);
+			  }
 		  }
-		  break;
-	  case AT_LEAST_ONE:
-		  if (bindings.getOperands(boundOperand).isEmpty()) {
-			  System.err.println("Operand " + boundOperand + " is not bound");
-			  System.exit(1);
-		  }
-		  break;
 	  }
-	  	
-	
+  }
+  
+  private Operand getOperand(Object[] tuple) {
+	  return (Operand) tuple[0];
+  }
+  
+  private Integer getType(Object[] tuple) {
+	  return (Integer) tuple[1];
   }
 
 private void printForOptions() {
@@ -421,18 +417,13 @@ private String getLongFlag(Option opt) {
 }
 
 private boolean isOption(String arg) {
-	  return arg.startsWith("-");
+	  return arg.startsWith("-") && arg.length() > 1;
   }
 
 private boolean isShortOption(String arg) {
 	return arg.startsWith("-") && arg.charAt(1) != '-';
 }
   
-  private Operand getOperand() {
-	  Operand[] operand = program_operands.keySet().toArray(new Operand[program_operands.entrySet().size()]);
-	  return operand.length > 0 ? operand[0] : null;
-  }
-
 
 private String removeDashes(String input) {
 	  while(input.charAt(0) == '-') {
@@ -562,9 +553,9 @@ private Option findMandatory(String toFind) {
   // retrievable from the `ArgsParser.Bindings` store by passing the
   // same `requiredOperand` instance to the `getOperand` method.
   public ArgsParser requiredOperand(Operand requiredOperand) {
-	  this.docNameToOperand.put(requiredOperand.getDocName(), requiredOperand);
-	  this.program_operands.put(requiredOperand, REQUIRED);
-    return this;
+	  Object[] operandTuple = new Object[]{requiredOperand, REQUIRED};
+	  mandatory_operands.add(operandTuple);
+	  return this;
   }
 
   // Adds the given operand to the parsing sequence as an optional
@@ -573,8 +564,8 @@ private Option findMandatory(String toFind) {
   // instance to the `getOperands` method, which will return either a
   // the empty list or a list with a single element.
   public ArgsParser optionalOperand(Operand optionalOperand) {
-	  this.docNameToOperand.put(optionalOperand.getDocName(), optionalOperand);
-	this.program_operands.put(optionalOperand, OPTIONAL);
+	Object[] operandTuple = new Object[]{optionalOperand, OPTIONAL};
+	optional_operands.add(operandTuple);
     return this;
   }
 
@@ -590,7 +581,8 @@ private Option findMandatory(String toFind) {
   // validation process).
   public ArgsParser oneOrMoreOperands(Operand operand) {
 	  this.docNameToOperand.put(operand.getDocName(), operand);
-    this.program_operands.put(operand, AT_LEAST_ONE);
+    Object[] operandTuple = new Object[]{operand, AT_LEAST_ONE};
+    mandatory_operands.add(operandTuple);
     return this;
   }
 
@@ -605,7 +597,8 @@ private Option findMandatory(String toFind) {
   // all matches, potentially the empty list.
   public ArgsParser zeroOrMoreOperands(Operand operand) {
 	  this.docNameToOperand.put(operand.getDocName(), operand);
-    this.program_operands.put(operand, AT_LEAST_ZERO);
+    Object[] operandTuple = new Object[]{operand, AT_LEAST_ZERO};
+    optional_operands.add(operandTuple);
     return this;
   }
 
