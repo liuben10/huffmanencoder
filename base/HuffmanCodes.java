@@ -138,6 +138,10 @@ public class HuffmanCodes {
 		if (bindings.hasOption(SHOW_BINARY)) {
 			encoder.showBinary();
 		}
+		
+		if (bindings.hasOption(SHOW_FREQUENCY)) {
+			encoder.showFrequencies();
+		}
 	}
 	
 	public void printShowCodes() {
@@ -146,6 +150,15 @@ public class HuffmanCodes {
 		System.out.println("CODES");
 		for(Character c : keys) {
 			System.out.println("\""  + replacements.get(c) + "\" -> '" + c + "'");
+		}
+	}
+	
+	public void showFrequencies() {
+		Set<Character> keyset = frequencyMap.keySet();
+		Character[] keys = keyset.toArray(new Character[keyset.size()]);
+		System.out.println("FREQUENCY TABLE");
+		for(Character c : keys) {
+			System.out.println("'" + c + "' : " + frequencyMap.get(c));
 		}
 	}
 	
@@ -171,7 +184,6 @@ public class HuffmanCodes {
 		encode(inputString);
 	}
 	private String encode(String raw) {
-		System.out.println("encoded input = " + raw + " for file = " + this.inputFile);
 		String resultStream = "";
 		String header = encodeTree();
 		
@@ -190,9 +202,7 @@ public class HuffmanCodes {
 	private void writeBits(String header, String resultStream) throws IOException {
 		BitOutputStream out = new BitOutputStream(outputFile);
 		out.writeInt(header.length());
-		System.out.println("headerlength = " + header.length());
 		out.writeInt(resultStream.length());
-		System.out.println("textlength = " + resultStream.length());
 		for(char c : header.toCharArray()) {
 			if (c == '1') {
 				out.writeBit(1);
@@ -223,10 +233,8 @@ public class HuffmanCodes {
 		char[] textLengthBits = subArray(encodedbits, 32, 32);
 		int headerLength = fromBinaryString(new String(headerLengthBits));
 		int textLength = fromBinaryString(new String(textLengthBits));
-		System.out.println(encodedString);
 		String encoded = encodedString.substring(64);
 		String decodedString = decode(encoded, headerLength, textLength);
-		System.out.println("Decoded output = " + decodedString);
 		init(decodedString);
 		writeFile(decodedString);
 		
@@ -245,10 +253,8 @@ public class HuffmanCodes {
 	}
 	
 	public String decode(String encoded, int headerLength, int textLength) {
-		System.out.println(encoded);
 		String resultString = "";
 		HuffmanTree<Character, Integer> huffmanTree = buildTree(encoded);
-		System.out.println("new start index = " + startIndex);
 		HuffmanTree<Character, Integer> iterator = huffmanTree;
 		char[] encodedBinary = subArray(encoded.toCharArray(), startIndex, textLength );
 		this.binary = new String(encodedBinary);
@@ -301,7 +307,6 @@ public class HuffmanCodes {
 
 	public Map<Character, String> generateReplacementMap() {
 		Map<Character, String> replacements = new HashMap<Character, String>();
-		System.out.println(huffmanTree.treeString());
 		Set<Character> keyset = frequencyMap.keySet();
 		Character[] keys = keyset.toArray(new Character[keyset.size()]);
 		for(Character c : keys) {
