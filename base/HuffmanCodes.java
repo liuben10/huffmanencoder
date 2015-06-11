@@ -6,6 +6,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -46,6 +49,8 @@ public class HuffmanCodes {
 	private String inputString;
 	
 	private String encodedString;
+
+	private String binary;
 	
 
 	
@@ -102,7 +107,6 @@ public class HuffmanCodes {
 		} else {
 			BitInputStream inputStream = new BitInputStream(inputFile);
 			encodedString = buildEncodedString(inputStream);
-			System.out.println(encodedString);
 		}
 	}
 	
@@ -120,7 +124,6 @@ public class HuffmanCodes {
 
 	public static void main(String...args) throws FileNotFoundException, IOException {
 		ArgsParser.Bindings bindings = parser.parse(args);
-		System.out.println(bindings.getOperands(FILES));
 		HuffmanCodes encoder = new HuffmanCodes(bindings);
 		if (bindings.hasOption(ENCODE)) {
 			encoder.encode();
@@ -128,16 +131,34 @@ public class HuffmanCodes {
 			encoder.decode();
 		}
 		
+		if (bindings.hasOption(SHOW_CODES)) {
+			encoder.printShowCodes();
+		}
 		
+		if (bindings.hasOption(SHOW_BINARY)) {
+			encoder.showBinary();
+		}
 	}
 	
+	public void printShowCodes() {
+		Set<Character> keyset = replacements.keySet();
+		Character[] keys = keyset.toArray(new Character[keyset.size()]);
+		System.out.println("CODES");
+		for(Character c : keys) {
+			System.out.println("\""  + replacements.get(c) + "\" -> '" + c + "'");
+		}
+	}
+	
+	public void showBinary() {
+		System.out.println("ENCODED SEQUENCE");
+		System.out.println(this.binary);
+	}
+
 	public void init(String raw) {
 		Map<Character, Integer> frequencyMap = sortedFrequencyMap(raw);
 		setFrequencyMap(frequencyMap);
 		this.inputString = raw;
-		System.out.println(inputString);
 		PriorityQueue<HuffmanTree<Character, Integer>> q = sortedFrequency(raw);
-		System.out.println(q);
 		HuffmanTree<Character, Integer> resultTree = buildHuffmanTree(q);
 		setHuffmanTree(resultTree);
 		
@@ -150,30 +171,43 @@ public class HuffmanCodes {
 		encode(inputString);
 	}
 	private String encode(String raw) {
+		System.out.println("encoded input = " + raw + " for file = " + this.inputFile);
 		String resultStream = "";
 		String header = encodeTree();
 		
 		for(char c : raw.toCharArray()) {
 			resultStream += replacements.get(c);
 		}
+		this.binary = resultStream;
 		try {
-			writeBits(header + resultStream);
+			writeBits(header, resultStream);
 		} catch (Exception e) { 
 			e.printStackTrace();
 		}
 		return header + resultStream;
 	}
 	
-	private void writeBits(String input) throws IOException {
-		System.out.println(input);
+	private void writeBits(String header, String resultStream) throws IOException {
 		BitOutputStream out = new BitOutputStream(outputFile);
-		for(char c : input.toCharArray()) {
+		out.writeInt(header.length());
+		System.out.println("headerlength = " + header.length());
+		out.writeInt(resultStream.length());
+		System.out.println("textlength = " + resultStream.length());
+		for(char c : header.toCharArray()) {
 			if (c == '1') {
 				out.writeBit(1);
 			} else {
 				out.writeBit(0);
 			}
 		}
+		for(char c : resultStream.toCharArray()) {
+			if (c == '1') {
+				out.writeBit(1);
+			} else {
+				out.writeBit(0);
+			}
+		}
+
 		out.close();
 		
 	}
@@ -184,8 +218,16 @@ public class HuffmanCodes {
 	}
 	
 	public void decode() {
-		String decodedString = decode(encodedString);
-		System.out.println(decodedString);
+		char[] encodedbits = encodedString.toCharArray();
+		char[] headerLengthBits = subArray(encodedbits, 0, 32);
+		char[] textLengthBits = subArray(encodedbits, 32, 32);
+		int headerLength = fromBinaryString(new String(headerLengthBits));
+		int textLength = fromBinaryString(new String(textLengthBits));
+		System.out.println(encodedString);
+		String encoded = encodedString.substring(64);
+		String decodedString = decode(encoded, headerLength, textLength);
+		System.out.println("Decoded output = " + decodedString);
+		init(decodedString);
 		writeFile(decodedString);
 		
 	}
@@ -202,11 +244,14 @@ public class HuffmanCodes {
 		}
 	}
 	
-	public String decode(String encoded) {
+	public String decode(String encoded, int headerLength, int textLength) {
+		System.out.println(encoded);
 		String resultString = "";
 		HuffmanTree<Character, Integer> huffmanTree = buildTree(encoded);
+		System.out.println("new start index = " + startIndex);
 		HuffmanTree<Character, Integer> iterator = huffmanTree;
-		char[] encodedBinary = subArray(encoded.toCharArray(), startIndex, encoded.length() - startIndex);
+		char[] encodedBinary = subArray(encoded.toCharArray(), startIndex, textLength );
+		this.binary = new String(encodedBinary);
 		for(char c : encodedBinary) {
 			if (c == '0') {
 				iterator = iterator.getLeftChild();
@@ -367,32 +412,45 @@ public class HuffmanCodes {
 				return value;
 			}
 		}
-		
 	}
 	
-	public String readFile(String filename){
-		BufferedReader br = null;
-		StringBuilder sb = new StringBuilder();
-		
-		try {
-			String sCurrentLine;
-			br = new BufferedReader(new FileReader(filename));
-			while ((sCurrentLine = br.readLine()) != null) {
-				sb.append(sCurrentLine);
-			}
 	
+	
+	public String readFile(String filename){
+		String result = "";
+		try {
+			byte[] data = Files.readAllBytes(Paths.get(filename));
+			result = new String(data, "UTF-8");
 		} catch (IOException e) {
+			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
-		try {
-			if (br != null) br.close();
-		} catch (IOException ex) {
-			ex.printStackTrace();
-		}
-		return sb.toString();
+		return result;
 	}	
 	
+//	public String readFile(String filename){
+//		BufferedReader br = null;
+//		StringBuilder sb = new StringBuilder();
+//		
+//		try {
+//			String sCurrentLine;
+//			br = new BufferedReader(new FileReader(filename));
+//			while ((sCurrentLine = br.readLine()) != null) {
+//				sb.append(sCurrentLine + "\n");
+//			}
+//	
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
+//		
+//		try {
+//			if (br != null) br.close();
+//		} catch (IOException ex) {
+//			ex.printStackTrace();
+//		}
+//		return sb.toString();
+//	}
+//	
 
 	final class HuffmanTree<K, V> implements Map.Entry<K, V> {
 	    private final K key;
